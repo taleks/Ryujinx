@@ -2,6 +2,7 @@
 using Ryujinx.Common.Configuration;
 using Ryujinx.Input.HLE;
 using SPB.Graphics.Vulkan;
+using SPB.Platform.Cocoa;
 using SPB.Platform.Win32;
 using SPB.Platform.X11;
 using SPB.Windowing;
@@ -24,12 +25,19 @@ namespace Ryujinx.Ui
 
                 return new SimpleWin32Window(new NativeHandle(windowHandle));
             }
-            else if (OperatingSystem.IsLinux())
+
+            if (OperatingSystem.IsLinux())
             {
                 IntPtr displayHandle = gdk_x11_display_get_xdisplay(Display.Handle);
                 IntPtr windowHandle = gdk_x11_window_get_xid(Window.Handle);
 
                 return new SimpleX11Window(new NativeHandle(displayHandle), new NativeHandle(windowHandle));
+            }
+
+            if (OperatingSystem.IsMacOS())
+            {
+                IntPtr windowHandle = gdk_quartz_window_get_nswindow(Window.Handle);
+                return new SimpleCocoaWindow(new NativeHandle(windowHandle));
             }
 
             throw new NotImplementedException();
@@ -43,6 +51,9 @@ namespace Ryujinx.Ui
 
         [DllImport("libgdk-3.so.0")]
         private static extern IntPtr gdk_x11_window_get_xid(IntPtr gdkWindow);
+
+        [DllImport("libgdk-3.dylib")]
+        private static extern IntPtr gdk_quartz_window_get_nswindow(IntPtr gdkWindow);
 
         protected override bool OnConfigureEvent(EventConfigure evnt)
         {
