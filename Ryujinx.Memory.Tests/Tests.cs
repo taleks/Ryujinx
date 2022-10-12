@@ -13,7 +13,7 @@ namespace Ryujinx.Memory.Tests
         [SetUp]
         public void Setup()
         {
-            _memoryBlock = new MemoryBlock(MemorySize);
+            _memoryBlock = new MemoryBlock(MemoryPurpose.Data, MemorySize);
         }
 
         [TearDown]
@@ -47,8 +47,8 @@ namespace Ryujinx.Memory.Tests
                 return;
             }
 
-            using MemoryBlock backing = new MemoryBlock(0x10000, MemoryAllocationFlags.Mirrorable);
-            using MemoryBlock toAlias = new MemoryBlock(0x10000, MemoryAllocationFlags.Reserve | MemoryAllocationFlags.ViewCompatible);
+            using MemoryBlock backing = new MemoryBlock(MemoryPurpose.Data, 0x10000, MemoryAllocationFlags.Mirrorable);
+            using MemoryBlock toAlias = new MemoryBlock(MemoryPurpose.Data, 0x10000, MemoryAllocationFlags.Reserve | MemoryAllocationFlags.ViewCompatible);
 
             toAlias.MapView(backing, 0x1000, 0, 0x4000);
             toAlias.UnmapView(backing, 0x3000, 0x1000);
@@ -66,8 +66,8 @@ namespace Ryujinx.Memory.Tests
                 return;
             }
 
-            using MemoryBlock backing = new MemoryBlock(0x80000, MemoryAllocationFlags.Mirrorable);
-            using MemoryBlock toAlias = new MemoryBlock(0x80000, MemoryAllocationFlags.Reserve | MemoryAllocationFlags.ViewCompatible);
+            using MemoryBlock backing = new MemoryBlock(MemoryPurpose.Data, 0x80000, MemoryAllocationFlags.Mirrorable);
+            using MemoryBlock toAlias = new MemoryBlock(MemoryPurpose.Data, 0x80000, MemoryAllocationFlags.Reserve | MemoryAllocationFlags.ViewCompatible);
 
             Random rng = new Random(123);
 

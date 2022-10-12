@@ -1,121 +1,93 @@
-﻿using System;
+﻿using Ryujinx.Common.Logging;
+using System;
 
 namespace Ryujinx.Memory
 {
     public static class MemoryManagement
     {
-        public static IntPtr Allocate(ulong size)
+        /// <summary>
+        /// Actual platform-specific memory manager.
+        /// </summary>
+        private static readonly IMemoryManagementImpl _impl = SelectImplementation();
+
+        private static IMemoryManagementImpl SelectImplementation()
         {
             if (OperatingSystem.IsWindows())
             {
-                return MemoryManagementWindows.Allocate((IntPtr)size);
+                return new MemoryManagementWindows();
             }
-            else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+
+            if (OperatingSystem.IsLinux())
             {
-                return MemoryManagementUnix.Allocate(size);
+                return new MemoryManagementLinux();
             }
-            else
+
+            if (OperatingSystem.IsMacOS())
             {
-                throw new PlatformNotSupportedException();
+                return MemoryManagementAppleSilicon.IsAppleSilicon
+                    ? new MemoryManagementAppleSilicon()
+                    : new MemoryManagementMacOs();
             }
+
+            throw new PlatformNotSupportedException();
         }
 
-        public static IntPtr Reserve(ulong size, bool viewCompatible)
+        public static IntPtr Allocate(MemoryPurpose purpose, ulong size)
         {
-            if (OperatingSystem.IsWindows())
-            {
-                return MemoryManagementWindows.Reserve((IntPtr)size, viewCompatible);
-            }
-            else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-            {
-                return MemoryManagementUnix.Reserve(size);
-            }
-            else
-            {
-                throw new PlatformNotSupportedException();
-            }
+            Logger.Info?.Print(LogClass.MemoryManager, $"ALLOC {purpose}: {size}");
+            return _impl.Allocate(purpose, size);
         }
 
-        public static bool Commit(IntPtr address, ulong size)
+        public static IntPtr Reserve(MemoryPurpose purpose, ulong size, bool viewCompatible)
         {
-            if (OperatingSystem.IsWindows())
-            {
-                return MemoryManagementWindows.Commit(address, (IntPtr)size);
-            }
-            else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-            {
-                return MemoryManagementUnix.Commit(address, size);
-            }
-            else
-            {
-                throw new PlatformNotSupportedException();
-            }
+            Logger.Info?.Print(LogClass.MemoryManager, $"RESERVE {purpose}: {size}, view compatible {viewCompatible}");
+            return _impl.Reserve(purpose, size, viewCompatible);
         }
 
-        public static bool Decommit(IntPtr address, ulong size)
+        public static bool Commit(MemoryPurpose purpose, IntPtr address, ulong size)
         {
-            if (OperatingSystem.IsWindows())
-            {
-                return MemoryManagementWindows.Decommit(address, (IntPtr)size);
-            }
-            else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-            {
-                return MemoryManagementUnix.Decommit(address, size);
-            }
-            else
-            {
-                throw new PlatformNotSupportedException();
-            }
+            Logger.Info?.Print(LogClass.MemoryManager, $"COMMIT {purpose}: {size} @ {address:x}");
+            return _impl.Commit(purpose, address, size);
         }
 
-        public static void MapView(IntPtr sharedMemory, ulong srcOffset, IntPtr address, ulong size, MemoryBlock owner)
+        public static bool Decommit(MemoryPurpose purpose, IntPtr address, ulong size)
         {
-            if (OperatingSystem.IsWindows())
-            {
-                MemoryManagementWindows.MapView(sharedMemory, srcOffset, address, (IntPtr)size, owner);
-            }
-            else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-            {
-                MemoryManagementUnix.MapView(sharedMemory, srcOffset, address, size);
-            }
-            else
-            {
-                throw new PlatformNotSupportedException();
-            }
+            Logger.Info?.Print(LogClass.MemoryManager, $"DECOMMIT {purpose}: {size} @ {address:x}");
+            return _impl.Decommit(purpose, address, size);
         }
 
-        public static void UnmapView(IntPtr sharedMemory, IntPtr address, ulong size, MemoryBlock owner)
+        public static void MapView(MemoryBlock owner, IntPtr sharedMemory, ulong srcOffset, IntPtr address, ulong size)
         {
-            if (OperatingSystem.IsWindows())
-            {
-                MemoryManagementWindows.UnmapView(sharedMemory, address, (IntPtr)size, owner);
-            }
-            else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-            {
-                MemoryManagementUnix.UnmapView(address, size);
-            }
-            else
-            {
-                throw new PlatformNotSupportedException();
-            }
+            Logger.Info?.Print(
+                LogClass.MemoryManager,
+                $"MAPVIEW {owner.Purpose}: {size} @ {address:x}, shared mem: {sharedMemory:x} + {srcOffset}"
+            );
+            _impl.MapView(owner, sharedMemory, srcOffset, address, size);
         }
 
-        public static void Reprotect(IntPtr address, ulong size, MemoryPermission permission, bool forView, bool throwOnFail)
+        public static void UnmapView(MemoryBlock owner, IntPtr sharedMemory, IntPtr address, ulong size)
         {
-            bool result;
+            Logger.Info?.Print(
+                LogClass.MemoryManager,
+                $"UNMAPVIEW {owner.Purpose}: {size} @ {address:x}, shared mem: {sharedMemory:x}"
+            );
+            _impl.UnmapView(owner, sharedMemory, address, size);
+        }
 
-            if (OperatingSystem.IsWindows())
-            {
-                result = MemoryManagementWindows.Reprotect(address, (IntPtr)size, permission, forView);
-            }
-            else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-            {
-                result = MemoryManagementUnix.Reprotect(address, size, permission);
-            }
-            else
-            {
-                throw new PlatformNotSupportedException();
-            }
+        public static void Reprotect(
+            MemoryPurpose purpose,
+            MemoryPermission permission,
+            IntPtr address,
+            ulong size,
+            bool forView,
+            bool throwOnFail
+        )
+        {
+            Logger.Info?.Print(
+                LogClass.Application,
+                $"REPROTECT {purpose}: {size} @ {address:x}, {permission}, view: {forView}"
+            );
+            bool result = _impl.Reprotect(purpose, permission, address, size, forView);
 
             if (!result && throwOnFail)
             {
@@ -123,84 +95,41 @@ namespace Ryujinx.Memory
             }
         }
 
-        public static bool Free(IntPtr address, ulong size)
+        public static void Free(IntPtr address, ulong size)
         {
-            if (OperatingSystem.IsWindows())
-            {
-                return MemoryManagementWindows.Free(address, (IntPtr)size);
-            }
-            else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-            {
-                return MemoryManagementUnix.Free(address);
-            }
-            else
-            {
-                throw new PlatformNotSupportedException();
-            }
+            Logger.Info?.Print(LogClass.MemoryManager, $"FREE: {size} @ {address:x}");
+            _impl.Free(address, size);
         }
 
-        public static IntPtr CreateSharedMemory(ulong size, bool reserve)
+        public static IntPtr CreateSharedMemory(MemoryPurpose purpose, ulong size, bool reserve)
         {
-            if (OperatingSystem.IsWindows())
-            {
-                return MemoryManagementWindows.CreateSharedMemory((IntPtr)size, reserve);
-            }
-            else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-            {
-                return MemoryManagementUnix.CreateSharedMemory(size, reserve);
-            }
-            else
-            {
-                throw new PlatformNotSupportedException();
-            }
+            Logger.Info?.Print(LogClass.MemoryManager, $"CREATE SHARED {purpose}: {size}, reserve: {reserve}");
+            return _impl.CreateSharedMemory(purpose, size, reserve);
         }
 
-        public static void DestroySharedMemory(IntPtr handle)
+        public static void DestroySharedMemory(MemoryPurpose purpose, IntPtr handle)
         {
-            if (OperatingSystem.IsWindows())
-            {
-                MemoryManagementWindows.DestroySharedMemory(handle);
-            }
-            else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-            {
-                MemoryManagementUnix.DestroySharedMemory(handle);
-            }
-            else
-            {
-                throw new PlatformNotSupportedException();
-            }
+            Logger.Info?.Print(LogClass.MemoryManager, $"DESTROY SHARED {purpose}: @{handle:x}");
+            _impl.DestroySharedMemory(purpose, handle);
         }
 
-        public static IntPtr MapSharedMemory(IntPtr handle, ulong size)
+        public static IntPtr MapSharedMemory(MemoryPurpose purpose, IntPtr handle, ulong size)
         {
-            if (OperatingSystem.IsWindows())
-            {
-                return MemoryManagementWindows.MapSharedMemory(handle);
-            }
-            else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-            {
-                return MemoryManagementUnix.MapSharedMemory(handle, size);
-            }
-            else
-            {
-                throw new PlatformNotSupportedException();
-            }
+            Logger.Info?.Print(LogClass.MemoryManager, $"MAP SHARED {purpose}: {size}, fd: {handle:x}");
+            var ptr = _impl.MapSharedMemory(purpose, handle, size);
+
+            Logger.Info?.Print(
+                LogClass.MemoryManager,
+                $"MAP {purpose}: {size} @ {ptr:x}"
+            );
+
+            return ptr;
         }
 
-        public static void UnmapSharedMemory(IntPtr address, ulong size)
+        public static void UnmapSharedMemory(MemoryPurpose purpose, IntPtr address, ulong size)
         {
-            if (OperatingSystem.IsWindows())
-            {
-                MemoryManagementWindows.UnmapSharedMemory(address);
-            }
-            else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-            {
-                MemoryManagementUnix.UnmapSharedMemory(address, size);
-            }
-            else
-            {
-                throw new PlatformNotSupportedException();
-            }
+            Logger.Info?.Print(LogClass.MemoryManager, $"UNMAP SHARED {purpose}: {size} @ {address:x}");
+            _impl.UnmapSharedMemory(purpose, address, size);
         }
     }
 }

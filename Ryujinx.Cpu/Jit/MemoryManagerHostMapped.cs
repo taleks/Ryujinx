@@ -88,8 +88,8 @@ namespace Ryujinx.Cpu.Jit
 
             MemoryAllocationFlags asFlags = MemoryAllocationFlags.Reserve | MemoryAllocationFlags.ViewCompatible;
 
-            _addressSpace = new MemoryBlock(asSize, asFlags);
-            _addressSpaceMirror = new MemoryBlock(asSize, asFlags);
+            _addressSpace = new MemoryBlock(MemoryPurpose.Data, asSize, asFlags);
+            _addressSpaceMirror = new MemoryBlock(MemoryPurpose.Data, asSize, asFlags);
 
             Tracking = new MemoryTracking(this, PageSize, invalidAccessHandler);
             _memoryEh = new MemoryEhMeilleure(_addressSpace, _addressSpaceMirror, Tracking);

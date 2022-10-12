@@ -18,6 +18,7 @@ namespace Ryujinx.Common.Logging
         KernelScheduler,
         KernelSvc,
         Loader,
+        MemoryManager,
         ModLoader,
         Nvdec,
         Ptc,

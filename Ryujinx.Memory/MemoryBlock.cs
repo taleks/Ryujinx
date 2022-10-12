@@ -29,31 +29,37 @@ namespace Ryujinx.Memory
         public ulong Size { get; }
 
         /// <summary>
+        /// Actual purpose of this memory block.
+        /// </summary>
+        public MemoryPurpose Purpose { get; }
+
+        /// <summary>
         /// Creates a new instance of the memory block class.
         /// </summary>
         /// <param name="size">Size of the memory block in bytes</param>
         /// <param name="flags">Flags that controls memory block memory allocation</param>
         /// <exception cref="OutOfMemoryException">Throw when there's no enough memory to allocate the requested size</exception>
         /// <exception cref="PlatformNotSupportedException">Throw when the current platform is not supported</exception>
-        public MemoryBlock(ulong size, MemoryAllocationFlags flags = MemoryAllocationFlags.None)
+        public MemoryBlock(MemoryPurpose purpose, ulong size, MemoryAllocationFlags flags = MemoryAllocationFlags.None)
         {
             if (flags.HasFlag(MemoryAllocationFlags.Mirrorable))
             {
-                _sharedMemory = MemoryManagement.CreateSharedMemory(size, flags.HasFlag(MemoryAllocationFlags.Reserve));
-                _pointer = MemoryManagement.MapSharedMemory(_sharedMemory, size);
+                _sharedMemory = MemoryManagement.CreateSharedMemory(purpose, size, flags.HasFlag(MemoryAllocationFlags.Reserve));
+                _pointer = MemoryManagement.MapSharedMemory(purpose, _sharedMemory, size);
                 _usesSharedMemory = true;
             }
             else if (flags.HasFlag(MemoryAllocationFlags.Reserve))
             {
                 _viewCompatible = flags.HasFlag(MemoryAllocationFlags.ViewCompatible);
-                _pointer = MemoryManagement.Reserve(size, _viewCompatible);
+                _pointer = MemoryManagement.Reserve(purpose, size, _viewCompatible);
             }
             else
             {
-                _pointer = MemoryManagement.Allocate(size);
+                _pointer = MemoryManagement.Allocate(purpose, size);
             }
 
             Size = size;
+            Purpose = purpose;
 
             _viewStorages = new ConcurrentDictionary<MemoryBlock, byte>();
             _viewStorages.TryAdd(this, 0);
@@ -67,10 +73,11 @@ namespace Ryujinx.Memory
         /// <param name="sharedMemory">Shared memory to use as backing storage for this block</param>
         /// <exception cref="OutOfMemoryException">Throw when there's no enough address space left to map the shared memory</exception>
         /// <exception cref="PlatformNotSupportedException">Throw when the current platform is not supported</exception>
-        private MemoryBlock(ulong size, IntPtr sharedMemory)
+        private MemoryBlock(MemoryPurpose purpose, ulong size, IntPtr sharedMemory)
         {
-            _pointer = MemoryManagement.MapSharedMemory(sharedMemory, size);
+            _pointer = MemoryManagement.MapSharedMemory(purpose, sharedMemory, size);
             Size = size;
+            Purpose = purpose;
             _usesSharedMemory = true;
             _isMirror = true;
         }
@@ -90,7 +97,7 @@ namespace Ryujinx.Memory
                 throw new NotSupportedException("Mirroring is not supported on the memory block because the Mirrorable flag was not set.");
             }
 
-            return new MemoryBlock(Size, _sharedMemory);
+            return new MemoryBlock(Purpose, Size, _sharedMemory);
         }
 
         /// <summary>
@@ -104,7 +111,7 @@ namespace Ryujinx.Memory
         /// <exception cref="InvalidMemoryRegionException">Throw when either <paramref name="offset"/> or <paramref name="size"/> are out of range</exception>
         public bool Commit(ulong offset, ulong size)
         {
-            return MemoryManagement.Commit(GetPointerInternal(offset, size), size);
+            return MemoryManagement.Commit(Purpose, GetPointerInternal(offset, size), size);
         }
 
         /// <summary>
@@ -118,7 +125,7 @@ namespace Ryujinx.Memory
         /// <exception cref="InvalidMemoryRegionException">Throw when either <paramref name="offset"/> or <paramref name="size"/> are out of range</exception>
         public bool Decommit(ulong offset, ulong size)
         {
-            return MemoryManagement.Decommit(GetPointerInternal(offset, size), size);
+            return MemoryManagement.Decommit(Purpose, GetPointerInternal(offset, size), size);
         }
 
         /// <summary>
@@ -143,7 +150,7 @@ namespace Ryujinx.Memory
                 srcBlock.IncrementViewCount();
             }
 
-            MemoryManagement.MapView(srcBlock._sharedMemory, srcOffset, GetPointerInternal(dstOffset, size), size, this);
+            MemoryManagement.MapView(this, srcBlock._sharedMemory, srcOffset, GetPointerInternal(dstOffset, size), size);
         }
 
         /// <summary>
@@ -154,7 +161,7 @@ namespace Ryujinx.Memory
         /// <param name="size">Size of the range to be unmapped</param>
         public void UnmapView(MemoryBlock srcBlock, ulong offset, ulong size)
         {
-            MemoryManagement.UnmapView(srcBlock._sharedMemory, GetPointerInternal(offset, size), size, this);
+            MemoryManagement.UnmapView(this, srcBlock._sharedMemory, GetPointerInternal(offset, size), size);
         }
 
         /// <summary>
@@ -169,7 +176,7 @@ namespace Ryujinx.Memory
         /// <exception cref="MemoryProtectionException">Throw when <paramref name="permission"/> is invalid</exception>
         public void Reprotect(ulong offset, ulong size, MemoryPermission permission, bool throwOnFail = true)
         {
-            MemoryManagement.Reprotect(GetPointerInternal(offset, size), size, permission, _viewCompatible, throwOnFail);
+            MemoryManagement.Reprotect(Purpose, permission, GetPointerInternal(offset, size), size, _viewCompatible, throwOnFail);
         }
 
         /// <summary>
@@ -398,7 +405,7 @@ namespace Ryujinx.Memory
             {
                 if (_usesSharedMemory)
                 {
-                    MemoryManagement.UnmapSharedMemory(ptr, Size);
+                    MemoryManagement.UnmapSharedMemory(Purpose, ptr, Size);
                 }
                 else
                 {
@@ -429,7 +436,7 @@ namespace Ryujinx.Memory
         {
             if (Interlocked.Decrement(ref _viewCount) == 0 && _sharedMemory != IntPtr.Zero && !_isMirror)
             {
-                MemoryManagement.DestroySharedMemory(_sharedMemory);
+                MemoryManagement.DestroySharedMemory(Purpose, _sharedMemory);
                 _sharedMemory = IntPtr.Zero;
             }
         }

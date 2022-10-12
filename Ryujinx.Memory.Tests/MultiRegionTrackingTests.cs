@@ -20,7 +20,7 @@ namespace Ryujinx.Memory.Tests
         [SetUp]
         public void Setup()
         {
-            _memoryBlock = new MemoryBlock(MemorySize);
+            _memoryBlock = new MemoryBlock(MemoryPurpose.Data, MemorySize);
             _memoryManager = new MockVirtualMemoryManager(MemorySize, PageSize);
             _tracking = new MemoryTracking(_memoryManager, PageSize);
         }

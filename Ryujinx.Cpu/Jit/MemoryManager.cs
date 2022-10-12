@@ -70,7 +70,7 @@ namespace Ryujinx.Cpu.Jit
 
             AddressSpaceBits = asBits;
             _addressSpaceSize = asSize;
-            _pageTable = new MemoryBlock((asSize / PageSize) * PteSize);
+            _pageTable = new MemoryBlock(MemoryPurpose.Data, (asSize / PageSize) * PteSize);
 
             Tracking = new MemoryTracking(this, PageSize);
         }

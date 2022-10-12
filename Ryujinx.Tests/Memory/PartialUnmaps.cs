@@ -24,8 +24,8 @@ namespace Ryujinx.Tests.Memory
         {
             MemoryAllocationFlags asFlags = MemoryAllocationFlags.Reserve | MemoryAllocationFlags.ViewCompatible;
 
-            var addressSpace = new MemoryBlock(asSize, asFlags);
-            var addressSpaceMirror = new MemoryBlock(asSize, asFlags);
+            var addressSpace = new MemoryBlock(MemoryPurpose.Data, asSize, asFlags);
+            var addressSpaceMirror = new MemoryBlock(MemoryPurpose.Data, asSize, asFlags);
 
             var tracking = new MemoryTracking(new MockVirtualMemoryManager(asSize, 0x1000), 0x1000);
             var exceptionHandler = new MemoryEhMeilleure(addressSpace, addressSpaceMirror, tracking);
@@ -70,7 +70,7 @@ namespace Ryujinx.Tests.Memory
             ulong vaSize = 0x100000;
 
             // The first 0x100000 is mapped to start. It is replaced from the center with the 0x200000 mapping.
-            var backing = new MemoryBlock(vaSize * 2, MemoryAllocationFlags.Mirrorable);
+            var backing = new MemoryBlock(MemoryPurpose.Data, vaSize * 2, MemoryAllocationFlags.Mirrorable);
 
             (MemoryBlock unusedMainMemory, MemoryBlock memory, MemoryEhMeilleure exceptionHandler) = GetVirtual(vaSize * 2);
 
@@ -214,7 +214,7 @@ namespace Ryujinx.Tests.Memory
             ulong vaSize = 0x100000;
 
             // The first 0x100000 is mapped to start. It is replaced from the center with the 0x200000 mapping.
-            var backing = new MemoryBlock(vaSize * 2, MemoryAllocationFlags.Mirrorable);
+            var backing = new MemoryBlock(MemoryPurpose.Data, vaSize * 2, MemoryAllocationFlags.Mirrorable);
 
             (MemoryBlock mainMemory, MemoryBlock unusedMirror, MemoryEhMeilleure exceptionHandler) = GetVirtual(vaSize * 2);
 

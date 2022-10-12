@@ -53,7 +53,7 @@ namespace Ryujinx.Tests.Cpu
         {
             _currAddress = CodeBaseAddress;
 
-            _ram = new MemoryBlock(Size * 2);
+            _ram = new MemoryBlock(MemoryPurpose.Data, Size * 2);
             _memory = new MemoryManager(_ram, 1ul << 16);
             _memory.IncrementReferenceCount();
             _memory.Map(CodeBaseAddress, 0, Size * 2);

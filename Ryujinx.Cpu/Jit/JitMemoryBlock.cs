@@ -12,7 +12,7 @@ namespace Ryujinx.Cpu.Jit
 
         public JitMemoryBlock(ulong size, MemoryAllocationFlags flags)
         {
-            _impl = new MemoryBlock(size, flags);
+            _impl = new MemoryBlock(MemoryPurpose.Code, size, flags);
         }
 
         public bool Commit(ulong offset, ulong size) => _impl.Commit(offset, size);

@@ -37,4 +37,19 @@ namespace Ryujinx.Memory
         /// </summary>
         ViewCompatible = 1 << 3
     }
+
+    /// <summary>
+    /// Indicates purpose of memory, used for tracking purposes.
+    /// </summary>
+    public enum MemoryPurpose
+    {
+        /// <summary>
+        /// Memory should be treated as memory with potentially executable code.
+        /// </summary>
+        Code,
+        /// <summary>
+        /// Non-executable memory.
+        /// </summary>
+        Data
+    }
 }
