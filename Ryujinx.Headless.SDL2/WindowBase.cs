@@ -1,4 +1,5 @@
 ﻿using ARMeilleure.Translation;
+using Ryujinx.Common;
 using Ryujinx.Common.Configuration;
 using Ryujinx.Common.Configuration.Hid;
 using Ryujinx.Common.Logging;
@@ -75,7 +76,7 @@ namespace Ryujinx.Headless.SDL2
             _enableMouse = enableMouse;
             HostUiTheme = new HeadlessHostUiTheme();
 
-            SDL2Driver.Instance.Initialize();
+            SDL2Driver.Instance.Initialize(new SyncWorkItemQueue());
         }
 
         public void Initialize(Switch device, List<InputConfig> inputConfigs, bool enableKeyboard, bool enableMouse)

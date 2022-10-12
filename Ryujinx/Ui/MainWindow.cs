@@ -77,6 +77,7 @@ namespace Ryujinx.Ui
 
         private string _lastScannedAmiiboId = "";
         private bool   _lastScannedAmiiboShowAll = false;
+        private readonly IWorkItemQueue _workItemQueue = new GtkWorkItemQueue();
 
         public RendererWidgetBase RendererWidget;
         public InputManager InputManager;
@@ -284,7 +285,10 @@ namespace Ryujinx.Ui
 
             Task.Run(RefreshFirmwareLabel);
 
-            InputManager = new InputManager(new GTK3KeyboardDriver(this), new SDL2GamepadDriver());
+            InputManager = new InputManager(
+                new GTK3KeyboardDriver(this),
+                new SDL2GamepadDriver(_workItemQueue)
+            );
         }
 
         private void UpdateIgnoreMissingServicesState(object sender, ReactiveEventArgs<bool> args)
@@ -434,7 +438,7 @@ namespace Ryujinx.Ui
             {
                 if (SDL2HardwareDeviceDriver.IsSupported)
                 {
-                    deviceDriver = new SDL2HardwareDeviceDriver();
+                    deviceDriver = new SDL2HardwareDeviceDriver(_workItemQueue);
                 }
                 else
                 {
@@ -486,7 +490,7 @@ namespace Ryujinx.Ui
                         ConfigurationState.Instance.System.AudioBackend.Value = AudioBackend.SDL2;
                         SaveConfig();
 
-                        deviceDriver = new SDL2HardwareDeviceDriver();
+                        deviceDriver = new SDL2HardwareDeviceDriver(_workItemQueue);
                     }
                     else
                     {
@@ -525,7 +529,7 @@ namespace Ryujinx.Ui
                         ConfigurationState.Instance.System.AudioBackend.Value = AudioBackend.SDL2;
                         SaveConfig();
 
-                        deviceDriver = new SDL2HardwareDeviceDriver();
+                        deviceDriver = new SDL2HardwareDeviceDriver(_workItemQueue);
                     }
                     else
                     {
@@ -1262,7 +1266,7 @@ namespace Ryujinx.Ui
 
                 if (fileChooser.Run() == (int)ResponseType.Accept)
                 {
-                    LoadApplication(fileChooser.Filename);
+                    LoadApplication(GetFileChooserFilename(fileChooser));
                 }
             }
         }
@@ -1373,10 +1377,10 @@ namespace Ryujinx.Ui
             {
                 Name = "Switch Firmware Files"
             };
+
+            // NOTE: these two can cause crashes, though exact reason is not clear.
             filter.AddPattern("*.zip");
             filter.AddPattern("*.xci");
-
-            fileChooser.AddFilter(filter);
 
             HandleInstallerDialog(fileChooser);
         }
@@ -1388,109 +1392,137 @@ namespace Ryujinx.Ui
             HandleInstallerDialog(directoryChooser);
         }
 
+        private static string GetFileChooserFilename(FileChooserNative fileChooser)
+        {
+            if (fileChooser.Run() != (int)ResponseType.Accept)
+            {
+                return null;
+            }
+
+            try
+            {
+                return fileChooser.Filename;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning?.Print(
+                    LogClass.Application, "Filename is not accessible: " + ex
+                );
+            }
+
+            try
+            {
+                return fileChooser.File.Path;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error?.Print(
+                    LogClass.Application, "Failed to open file: " + ex
+                );
+                return null;
+            }
+        }
+
         private void HandleInstallerDialog(FileChooserNative fileChooser)
         {
-            if (fileChooser.Run() == (int)ResponseType.Accept)
+            string filename = GetFileChooserFilename(fileChooser);
+            fileChooser.Dispose();
+
+            if (filename == null)
             {
-                try
+                return;
+            }
+
+            try
+            {
+                SystemVersion firmwareVersion = _contentManager.VerifyFirmwarePackage(filename);
+
+                if (firmwareVersion is null)
                 {
-                    string filename = fileChooser.Filename;
+                    GtkDialog.CreateErrorDialog($"A valid system firmware was not found in {filename}.");
 
-                    fileChooser.Dispose();
+                    return;
+                }
 
-                    SystemVersion firmwareVersion = _contentManager.VerifyFirmwarePackage(filename);
+                string dialogTitle = $"Install Firmware {firmwareVersion.VersionString}";
 
-                    if (firmwareVersion is null)
+                SystemVersion currentVersion = _contentManager.GetCurrentFirmwareVersion();
+
+                string dialogMessage = $"System version {firmwareVersion.VersionString} will be installed.";
+
+                if (currentVersion != null)
+                {
+                    dialogMessage += $"\n\nThis will replace the current system version {currentVersion.VersionString}. ";
+                }
+
+                dialogMessage += "\n\nDo you want to continue?";
+
+                ResponseType responseInstallDialog = (ResponseType)GtkDialog.CreateConfirmationDialog(dialogTitle, dialogMessage).Run();
+
+                MessageDialog waitingDialog = GtkDialog.CreateWaitingDialog(dialogTitle, "Installing firmware...");
+
+                if (responseInstallDialog == ResponseType.Yes)
+                {
+                    Logger.Info?.Print(LogClass.Application, $"Installing firmware {firmwareVersion.VersionString}");
+
+                    Thread thread = new Thread(() =>
                     {
-                        GtkDialog.CreateErrorDialog($"A valid system firmware was not found in {filename}.");
+                        Application.Invoke(delegate
+                        {
+                            waitingDialog.Run();
 
-                        return;
-                    }
+                        });
 
-                    string dialogTitle = $"Install Firmware {firmwareVersion.VersionString}";
+                        try
+                        {
+                            _contentManager.InstallFirmware(filename);
 
-                    SystemVersion currentVersion = _contentManager.GetCurrentFirmwareVersion();
+                            Application.Invoke(delegate
+                            {
+                                waitingDialog.Dispose();
 
-                    string dialogMessage = $"System version {firmwareVersion.VersionString} will be installed.";
+                                string message = $"System version {firmwareVersion.VersionString} successfully installed.";
 
-                    if (currentVersion != null)
-                    {
-                        dialogMessage += $"\n\nThis will replace the current system version {currentVersion.VersionString}. ";
-                    }
+                                GtkDialog.CreateInfoDialog(dialogTitle, message);
+                                Logger.Info?.Print(LogClass.Application, message);
 
-                    dialogMessage += "\n\nDo you want to continue?";
+                                // Purge Applet Cache.
 
-                    ResponseType responseInstallDialog = (ResponseType)GtkDialog.CreateConfirmationDialog(dialogTitle, dialogMessage).Run();
+                                DirectoryInfo miiEditorCacheFolder = new DirectoryInfo(System.IO.Path.Combine(AppDataManager.GamesDirPath, "0100000000001009", "cache"));
 
-                    MessageDialog waitingDialog = GtkDialog.CreateWaitingDialog(dialogTitle, "Installing firmware...");
-
-                    if (responseInstallDialog == ResponseType.Yes)
-                    {
-                        Logger.Info?.Print(LogClass.Application, $"Installing firmware {firmwareVersion.VersionString}");
-
-                        Thread thread = new Thread(() =>
+                                if (miiEditorCacheFolder.Exists)
+                                {
+                                    miiEditorCacheFolder.Delete(true);
+                                }
+                            });
+                        }
+                        catch (Exception ex)
                         {
                             Application.Invoke(delegate
                             {
-                                waitingDialog.Run();
+                                waitingDialog.Dispose();
 
+                                GtkDialog.CreateErrorDialog(ex.Message);
                             });
+                        }
+                        finally
+                        {
+                            RefreshFirmwareLabel();
+                        }
+                    });
 
-                            try
-                            {
-                                _contentManager.InstallFirmware(filename);
-
-                                Application.Invoke(delegate
-                                {
-                                    waitingDialog.Dispose();
-
-                                    string message = $"System version {firmwareVersion.VersionString} successfully installed.";
-
-                                    GtkDialog.CreateInfoDialog(dialogTitle, message);
-                                    Logger.Info?.Print(LogClass.Application, message);
-
-                                    // Purge Applet Cache.
-
-                                    DirectoryInfo miiEditorCacheFolder = new DirectoryInfo(System.IO.Path.Combine(AppDataManager.GamesDirPath, "0100000000001009", "cache"));
-
-                                    if (miiEditorCacheFolder.Exists)
-                                    {
-                                        miiEditorCacheFolder.Delete(true);
-                                    }
-                                });
-                            }
-                            catch (Exception ex)
-                            {
-                                Application.Invoke(delegate
-                                {
-                                    waitingDialog.Dispose();
-
-                                    GtkDialog.CreateErrorDialog(ex.Message);
-                                });
-                            }
-                            finally
-                            {
-                                RefreshFirmwareLabel();
-                            }
-                        });
-
-                        thread.Name = "GUI.FirmwareInstallerThread";
-                        thread.Start();
-                    }
-                }
-                catch (MissingKeyException ex)
-                {
-                    Logger.Error?.Print(LogClass.Application, ex.ToString());
-                    UserErrorDialog.CreateUserErrorDialog(UserError.FirmwareParsingFailed);
-                }
-                catch (Exception ex)
-                {
-                    GtkDialog.CreateErrorDialog(ex.Message);
+                    thread.Name = "GUI.FirmwareInstallerThread";
+                    thread.Start();
                 }
             }
-            else
+            catch (MissingKeyException ex)
             {
-                fileChooser.Dispose();
+                Logger.Error?.Print(LogClass.Application, ex.ToString());
+                UserErrorDialog.CreateUserErrorDialog(UserError.FirmwareParsingFailed);
+            }
+            catch (Exception ex)
+            {
+                GtkDialog.CreateErrorDialog(ex.Message);
             }
         }
 

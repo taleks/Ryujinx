@@ -1,5 +1,6 @@
 ﻿using Ryujinx.Audio.Common;
 using Ryujinx.Audio.Integration;
+using Ryujinx.Common;
 using Ryujinx.Memory;
 using Ryujinx.SDL2.Common;
 using System;
@@ -17,13 +18,13 @@ namespace Ryujinx.Audio.Backends.SDL2
         private readonly ManualResetEvent _pauseEvent;
         private readonly ConcurrentDictionary<SDL2HardwareDeviceSession, byte> _sessions;
 
-        public SDL2HardwareDeviceDriver()
+        public SDL2HardwareDeviceDriver(IWorkItemQueue workItemQueue)
         {
             _updateRequiredEvent = new ManualResetEvent(false);
             _pauseEvent = new ManualResetEvent(true);
             _sessions = new ConcurrentDictionary<SDL2HardwareDeviceSession, byte>();
 
-            SDL2Driver.Instance.Initialize();
+            SDL2Driver.Instance.Initialize(workItemQueue);
         }
 
         public static bool IsSupported => IsSupportedInternal();

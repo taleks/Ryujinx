@@ -77,7 +77,11 @@ namespace Ryujinx.Headless.SDL2
             _accountManager = new AccountManager(_libHacHorizonManager.RyujinxClient);
             _userChannelPersistence = new UserChannelPersistence();
 
-            _inputManager = new InputManager(new SDL2KeyboardDriver(), new SDL2GamepadDriver());
+            var invoker = new SyncWorkItemQueue();
+            _inputManager = new InputManager(
+                new SDL2KeyboardDriver(invoker),
+                new SDL2GamepadDriver(invoker)
+            );
 
             GraphicsConfig.EnableShaderCache = true;
 
@@ -509,7 +513,7 @@ namespace Ryujinx.Headless.SDL2
                                                                   _accountManager,
                                                                   _userChannelPersistence,
                                                                   renderer,
-                                                                  new SDL2HardwareDeviceDriver(),
+                                                                  new SDL2HardwareDeviceDriver(new SyncWorkItemQueue()),
                                                                   (bool)options.ExpandRam ? MemoryConfiguration.MemoryConfiguration6GB : MemoryConfiguration.MemoryConfiguration4GB,
                                                                   window,
                                                                   options.SystemLanguage,

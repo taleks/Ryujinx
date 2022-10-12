@@ -98,7 +98,10 @@ namespace Ryujinx.Ava.Ui.Windows
 
                 ViewModel.Initialize();
 
-                InputManager = new InputManager(new AvaloniaKeyboardDriver(this), new SDL2GamepadDriver());
+                InputManager = new InputManager(
+                    new AvaloniaKeyboardDriver(this),
+                    new SDL2GamepadDriver(new AvaloniaWorkItemQueue())
+                );
 
                 LoadGameList();
             }

@@ -91,6 +91,8 @@ namespace Ryujinx.Ava
 
         private readonly CancellationTokenSource _gpuCancellationTokenSource;
 
+        private IWorkItemQueue _workItemQueue = new AvaloniaWorkItemQueue();
+
         public event EventHandler AppExit;
         public event EventHandler<StatusUpdatedEventArgs> StatusUpdatedEvent;
 
@@ -627,7 +629,7 @@ namespace Ryujinx.Ava
             {
                 if (SDL2HardwareDeviceDriver.IsSupported)
                 {
-                    deviceDriver = new SDL2HardwareDeviceDriver();
+                    deviceDriver = new SDL2HardwareDeviceDriver(_workItemQueue);
                 }
                 else
                 {
@@ -679,7 +681,7 @@ namespace Ryujinx.Ava
                         ConfigurationState.Instance.System.AudioBackend.Value = AudioBackend.SDL2;
                         MainWindow.SaveConfig();
 
-                        deviceDriver = new SDL2HardwareDeviceDriver();
+                        deviceDriver = new SDL2HardwareDeviceDriver(_workItemQueue);
                     }
                     else
                     {
@@ -718,7 +720,7 @@ namespace Ryujinx.Ava
                         ConfigurationState.Instance.System.AudioBackend.Value = AudioBackend.SDL2;
                         MainWindow.SaveConfig();
 
-                        deviceDriver = new SDL2HardwareDeviceDriver();
+                        deviceDriver = new SDL2HardwareDeviceDriver(_workItemQueue);
                     }
                     else
                     {

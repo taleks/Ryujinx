@@ -1,13 +1,14 @@
-﻿using Ryujinx.SDL2.Common;
+﻿using Ryujinx.Common;
+using Ryujinx.SDL2.Common;
 using System;
 
 namespace Ryujinx.Input.SDL2
 {
     public class SDL2KeyboardDriver : IGamepadDriver
     {
-        public SDL2KeyboardDriver()
+        public SDL2KeyboardDriver(IWorkItemQueue workItemQueue)
         {
-            SDL2Driver.Instance.Initialize();
+            SDL2Driver.Instance.Initialize(workItemQueue);
         }
 
         public string DriverName => "SDL2";

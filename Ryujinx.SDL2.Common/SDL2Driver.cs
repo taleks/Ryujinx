@@ -33,6 +33,7 @@ namespace Ryujinx.SDL2.Common
         private bool _isRunning;
         private uint _refereceCount;
         private Thread _worker;
+        private IWorkItemQueue _workItemQueue;
 
         public event Action<int, int> OnJoyStickConnected;
         public event Action<int> OnJoystickDisconnected;
@@ -43,7 +44,50 @@ namespace Ryujinx.SDL2.Common
 
         private SDL2Driver() {}
 
-        public void Initialize()
+        private void SdlInit()
+        {
+            SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS4_RUMBLE, "1");
+            SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS5_RUMBLE, "1");
+            SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+            SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_SWITCH_HOME_LED, "0");
+            SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_JOY_CONS, "1");
+
+            if (SDL_Init(SdlInitFlags) != 0)
+            {
+                string errorMessage = $"SDL2 initlaization failed with error \"{SDL_GetError()}\"";
+
+                Logger.Error?.Print(LogClass.Application, errorMessage);
+
+                throw new Exception(errorMessage);
+            }
+
+            // First ensure that we only enable joystick events (for connected/disconnected).
+            SDL_GameControllerEventState(SDL_DISABLE);
+            SDL_JoystickEventState(SDL_ENABLE);
+
+            // Disable all joysticks information, we don't need them no need to flood the event queue for that.
+            SDL_EventState(SDL_EventType.SDL_JOYAXISMOTION, SDL_DISABLE);
+            SDL_EventState(SDL_EventType.SDL_JOYBALLMOTION, SDL_DISABLE);
+            SDL_EventState(SDL_EventType.SDL_JOYHATMOTION, SDL_DISABLE);
+            SDL_EventState(SDL_EventType.SDL_JOYBUTTONDOWN, SDL_DISABLE);
+            SDL_EventState(SDL_EventType.SDL_JOYBUTTONUP, SDL_DISABLE);
+
+            SDL_EventState(SDL_EventType.SDL_CONTROLLERSENSORUPDATE, SDL_DISABLE);
+
+            string gamepadDbPath = Path.Combine(ReleaseInformations.GetBaseApplicationDirectory(), "SDL_GameControllerDB.txt");
+
+            if (File.Exists(gamepadDbPath))
+            {
+                SDL_GameControllerAddMappingsFromFile(gamepadDbPath);
+            }
+
+            _registeredWindowHandlers = new ConcurrentDictionary<uint, Action<SDL_Event>>();
+            _worker = new Thread(EventWorker);
+            _isRunning = true;
+            _worker.Start();
+        }
+
+        public void Initialize(IWorkItemQueue workItemQueue)
         {
             lock (_lock)
             {
@@ -54,45 +98,12 @@ namespace Ryujinx.SDL2.Common
                     return;
                 }
 
-                SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS4_RUMBLE, "1");
-                SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS5_RUMBLE, "1");
-                SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
-                SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_SWITCH_HOME_LED, "0");
-                SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_JOY_CONS, "1");
+                _workItemQueue = workItemQueue;
 
-                if (SDL_Init(SdlInitFlags) != 0)
+                _workItemQueue.Submit(delegate
                 {
-                    string errorMessage = $"SDL2 initlaization failed with error \"{SDL_GetError()}\"";
-
-                    Logger.Error?.Print(LogClass.Application, errorMessage);
-
-                    throw new Exception(errorMessage);
-                }
-
-                // First ensure that we only enable joystick events (for connected/disconnected).
-                SDL_GameControllerEventState(SDL_DISABLE);
-                SDL_JoystickEventState(SDL_ENABLE);
-
-                // Disable all joysticks information, we don't need them no need to flood the event queue for that.
-                SDL_EventState(SDL_EventType.SDL_JOYAXISMOTION, SDL_DISABLE);
-                SDL_EventState(SDL_EventType.SDL_JOYBALLMOTION, SDL_DISABLE);
-                SDL_EventState(SDL_EventType.SDL_JOYHATMOTION, SDL_DISABLE);
-                SDL_EventState(SDL_EventType.SDL_JOYBUTTONDOWN, SDL_DISABLE);
-                SDL_EventState(SDL_EventType.SDL_JOYBUTTONUP, SDL_DISABLE);
-
-                SDL_EventState(SDL_EventType.SDL_CONTROLLERSENSORUPDATE, SDL_DISABLE);
-
-                string gamepadDbPath = Path.Combine(ReleaseInformations.GetBaseApplicationDirectory(), "SDL_GameControllerDB.txt");
-
-                if (File.Exists(gamepadDbPath))
-                {
-                    SDL_GameControllerAddMappingsFromFile(gamepadDbPath);
-                }
-
-                _registeredWindowHandlers = new ConcurrentDictionary<uint, Action<SDL_Event>>();
-                _worker = new Thread(EventWorker);
-                _isRunning = true;
-                _worker.Start();
+                    SdlInit();
+                });
             }
         }
 
@@ -145,13 +156,15 @@ namespace Ryujinx.SDL2.Common
 
             using ManualResetEventSlim waitHandle = new ManualResetEventSlim(false);
 
+
             while (_isRunning)
             {
-                while (SDL_PollEvent(out SDL_Event evnt) != 0)
-                {
-                    HandleSDLEvent(ref evnt);
-                }
-
+                _workItemQueue.Submit(delegate {
+                    while (SDL_PollEvent(out SDL_Event evnt) != 0)
+                    {
+                        HandleSDLEvent(ref evnt);
+                    }
+                });
                 waitHandle.Wait(WaitTimeMs);
             }
         }

@@ -1,4 +1,5 @@
-﻿using Ryujinx.SDL2.Common;
+﻿using Ryujinx.Common;
+using Ryujinx.SDL2.Common;
 using System;
 using System.Collections.Generic;
 using static SDL2.SDL;
@@ -17,12 +18,12 @@ namespace Ryujinx.Input.SDL2
         public event Action<string> OnGamepadConnected;
         public event Action<string> OnGamepadDisconnected;
 
-        public SDL2GamepadDriver()
+        public SDL2GamepadDriver(IWorkItemQueue workItemQueue)
         {
             _gamepadsInstanceIdsMapping = new Dictionary<int, string>();
             _gamepadsIds = new List<string>();
 
-            SDL2Driver.Instance.Initialize();
+            SDL2Driver.Instance.Initialize(workItemQueue);
             SDL2Driver.Instance.OnJoyStickConnected += HandleJoyStickConnected;
             SDL2Driver.Instance.OnJoystickDisconnected += HandleJoyStickDisconnected;
 
