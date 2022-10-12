@@ -10,8 +10,8 @@ namespace ARMeilleure.Translation.Cache
 {
     static class JitCache
     {
-        private const int PageSize = 4 * 1024;
-        private const int PageMask = PageSize - 1;
+        internal const int PageSize = 4 * 1024;
+        internal const int PageMask = PageSize - 1;
 
         private const int CodeAlignment = 4; // Bytes.
         private const int CacheSize = 2047 * 1024 * 1024;
@@ -24,6 +24,9 @@ namespace ARMeilleure.Translation.Cache
 
         private static readonly object _lock = new object();
         private static bool _initialized;
+        // Instance of class that performs actual writing of JIT code
+        // into memory, updating required permissions.
+        private static IJitCodeWriter _jitCodeWriter = InitializeCodeWriter();
 
         public static IntPtr Base => _jitRegion.Pointer;
 
@@ -48,6 +51,20 @@ namespace ARMeilleure.Translation.Cache
             }
         }
 
+        private static IJitCodeWriter InitializeCodeWriter()
+        {
+            // Apple Silicon requires different from other archs.
+            // NOTE: here _any_ macOS installation is treated as
+            // running on Apple Silicon. Ideally native helper
+            // should deal with it as it can check platform and
+            // existence of required functions.
+            return OperatingSystem.IsMacOS() switch
+            {
+                true => new JitCodeWriterAppleSilicon(),
+                false => new JitCodeWriterBase()
+            };
+        }
+
         public static IntPtr Map(CompiledFunction func)
         {
             byte[] code = func.Code;
@@ -58,13 +75,7 @@ namespace ARMeilleure.Translation.Cache
 
                 int funcOffset = Allocate(code.Length);
 
-                IntPtr funcPtr = _jitRegion.Pointer + funcOffset;
-
-                ReprotectAsWritable(funcOffset, code.Length);
-
-                Marshal.Copy(code, 0, funcPtr, code.Length);
-
-                ReprotectAsExecutable(funcOffset, code.Length);
+                IntPtr funcPtr = _jitCodeWriter.WriteCode(code, _jitRegion, funcOffset);
 
                 Add(funcOffset, code.Length, func.UnwindInfo);
 
@@ -87,26 +98,6 @@ namespace ARMeilleure.Translation.Cache
 
                 Remove(funcOffset);
             }
-        }
-
-        private static void ReprotectAsWritable(int offset, int size)
-        {
-            int endOffs = offset + size;
-
-            int regionStart = offset & ~PageMask;
-            int regionEnd = (endOffs + PageMask) & ~PageMask;
-
-            _jitRegion.Block.MapAsRwx((ulong)regionStart, (ulong)(regionEnd - regionStart));
-        }
-
-        private static void ReprotectAsExecutable(int offset, int size)
-        {
-            int endOffs = offset + size;
-
-            int regionStart = offset & ~PageMask;
-            int regionEnd = (endOffs + PageMask) & ~PageMask;
-
-            _jitRegion.Block.MapAsRx((ulong)regionStart, (ulong)(regionEnd - regionStart));
         }
 
         private static int Allocate(int codeSize)
