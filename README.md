@@ -1,3 +1,17 @@
+## What is this fork for?
+
+The goal was to try Ryujinx on macOS and M1 specifically, code translation aside.
+
+Main obstacles were:
+* Host memory management on Apple Silicon. There are a few quirks related to JIT related memory permissions
+  and difference between platforms.
+* Vulkan renderer initialisation. It is more or less straightforward, however Ryujinx relies on extensions
+  that are not available in MoltenVk implementation of Vulkan.
+
+In the end, mentioned extensions aside I've stopped at Horizon initialisation layer where
+heap allocator I believe needs a bit of work to decouple host and guest machine page sizes.
+
+# Original README content
 
 <h1 align="center">
   <br>

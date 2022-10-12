@@ -11,7 +11,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Memory
     {
         private static readonly int[] MappingUnitSizes = new int[]
         {
-            0x1000,
+            0x1000, // Should be 0x4000 if matching host page size is required on M1.
             0x10000,
             0x200000,
             0x400000,
@@ -19,6 +19,9 @@ namespace Ryujinx.HLE.HOS.Kernel.Memory
             0x40000000
         };
 
+        // NOTE: It causes issue if host page size is higher than 4k
+        //       and guest machine needs to match it.
+        //       e.g. on M1 it needs to be 0x4000.
         public const int PageSize = 0x1000;
 
         private const int KMemoryBlockSize = 0x40;

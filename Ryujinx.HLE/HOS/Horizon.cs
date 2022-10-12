@@ -52,6 +52,11 @@ namespace Ryujinx.HLE.HOS
         internal const int HidSize                 = 0x40000;
         internal const int FontSize                = 0x1100000;
         internal const int IirsSize                = 0x8000;
+        // NOTE: it implies pages size 4k and thus causes alignment issues
+        //       if actual page size is different. On M1 host page size
+        //       and guest (emulated machine) page size are different.
+        //       E.g. it should be 0x4000 unless the rest of memory allocation
+        //       can deal with it.
         internal const int TimeSize                = 0x1000;
         internal const int AppletCaptureBufferSize = 0x384000;
 

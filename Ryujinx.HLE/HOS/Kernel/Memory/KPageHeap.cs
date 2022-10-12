@@ -84,6 +84,8 @@ namespace Ryujinx.HLE.HOS.Kernel.Memory
             }
         }
 
+        // NOTE: this heap allocator implicitly relies on page size of 4k
+        //       for a larger page size of e.g. 16k it needs to be { 14, 16, 21, 22, 25, 29, 30 };
         private static readonly int[] _memoryBlockPageShifts = new int[] { 12, 16, 21, 22, 25, 29, 30 };
 
         private readonly ulong _heapAddress;

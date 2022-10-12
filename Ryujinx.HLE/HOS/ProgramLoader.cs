@@ -349,6 +349,7 @@ namespace Ryujinx.HLE.HOS
                     return KernelResult.Success;
                 }
 
+                // NOTE: Here it might need decoupling of host and guest machine page sizes.
                 size = BitUtils.AlignUp(size, KPageTableBase.PageSize);
 
                 return process.MemoryManager.SetProcessMemoryPermission(address, size, permission);
